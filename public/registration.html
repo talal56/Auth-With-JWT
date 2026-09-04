@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create account — Tasklist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="auth-page">
+    <div class="auth-card">
+
+      <div class="marks">
+        <span>✓</span><span>✓</span><span>✓</span>
+      </div>
+
+      <h1 class="auth-title">Get your tasks in order</h1>
+      <p class="auth-sub">Create an account to start tracking what matters.</p>
+
+      <form id="registerForm">
+        <label for="name">Name</label>
+        <input type="text" id="name" required placeholder="Your name" />
+
+        <label for="email">Email</label>
+        <input type="email" id="email" required placeholder="you@example.com" />
+        <p id="emailFeedback" class="field-hint"></p>
+
+        <label for="password">Password</label>
+        <input type="password" id="password" required placeholder="At least 6 characters" minlength="6" />
+
+        <button type="submit" class="btn-primary">Create account</button>
+      </form>
+
+      <p id="formMsg" class="form-msg hidden"></p>
+
+      <p class="auth-switch">Already have an account? <a href="login.html">Log in</a></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('registerForm');
+    const nameInput = document.getElementById('name');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const emailFeedback = document.getElementById('emailFeedback');
+    const formMsg = document.getElementById('formMsg');
+
+    // ===== LIVE EMAIL AVAILABILITY CHECK (debounced) =====
+    let debounceTimer;
+    emailInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const email = emailInput.value;
+
+      if (!email) {
+        emailFeedback.textContent = '';
+        return;
+      }
+
+      debounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/email-check?email=${encodeURIComponent(email)}`);
+          const data = await res.json();
+
+          if (data.available) {
+            emailFeedback.textContent = 'Email is available';
+            emailFeedback.className = 'field-hint hint-ok';
+          } else {
+            emailFeedback.textContent = 'This email is already registered';
+            emailFeedback.className = 'field-hint hint-error';
+          }
+        } catch (err) {
+          emailFeedback.textContent = '';
+        }
+      }, 500);
+    });
+
+    // ===== REGISTER SUBMIT =====
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formMsg.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: nameInput.value,
+            email: emailInput.value,
+            password: passwordInput.value,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Something went wrong');
+        }
+
+        formMsg.textContent = 'Account created — redirecting to login...';
+        formMsg.className = 'form-msg success';
+        formMsg.classList.remove('hidden');
+
+        setTimeout(() => {
+          window.location.href = 'login.html';
+        }, 1200);
+
+      } catch (err) {
+        formMsg.textContent = err.message;
+        formMsg.className = 'form-msg error';
+        formMsg.classList.remove('hidden');
+      }
+    });
+  </script>
+
+</body>
+</html>
