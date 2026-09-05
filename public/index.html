@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tasklist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <h1 class="logo">Tasklist</h1>
+      <button id="logoutBtn" class="btn-ghost">Log out</button>
+    </div>
+  </header>
+
+  <main class="task-page">
+    <div class="task-page-inner">
+
+      <form id="taskForm" class="task-form">
+        <input type="text" id="title" placeholder="Task title" required />
+        <input type="text" id="description" placeholder="Description" required />
+        <button type="submit" class="btn-primary">Add task</button>
+      </form>
+
+      <p id="formMsg" class="form-msg hidden"></p>
+
+      <div id="taskList" class="task-list">
+        <p class="status-msg">Loading your tasks...</p>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // ============================================
+    // STEP 1: Protect this page — redirect if not logged in
+    // This runs immediately, before anything else on the page
+    // ============================================
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      window.location.href = 'login.html';
+    }
+
+    // A small helper — every protected fetch call needs these same headers,
+    // so we build them once here instead of repeating this object everywhere
+    function authHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+    }
+
+    const taskForm = document.getElementById('taskForm');
+    const titleInput = document.getElementById('title');
+    const descriptionInput = document.getElementById('description');
+    const formMsg = document.getElementById('formMsg');
+    const taskList = document.getElementById('taskList');
+
+    // ============================================
+    // STEP 2: Load and display the logged-in user's tasks
+    // ============================================
+    async function loadTasks() {
+      try {
+        const res = await fetch('/api/tasks', {
+          headers: authHeaders(),
+        });
+
+        // If the token is invalid/expired, the backend sends 401 —
+        // that means the frontend should treat the user as logged out
+        if (res.status === 401) {
+          localStorage.removeItem('token');
+          window.location.href = 'login.html';
+          return;
+        }
+
+        const tasks = await res.json();
+
+        if (tasks.length === 0) {
+          taskList.innerHTML = '<p class="status-msg">No tasks yet — add one above.</p>';
+          return;
+        }
+
+        taskList.innerHTML = '';
+        tasks.forEach((task) => {
+          const item = document.createElement('div');
+          item.className = 'task-item';
+          item.innerHTML = `
+            <div class="task-item-main">
+              <p class="task-title ${task.status === 'Completed' ? 'task-done' : ''}">${task.title}</p>
+              <p class="task-desc">${task.description}</p>
+            </div>
+            <div class="task-actions">
+              <button class="btn-ghost toggle-btn">
+                ${task.status === 'Completed' ? 'Mark pending' : 'Mark done'}
+              </button>
+              <button class="btn-danger delete-btn">Delete</button>
+            </div>
+          `;
+
+          item.querySelector('.toggle-btn').addEventListener('click', () => toggleStatus(task));
+          item.querySelector('.delete-btn').addEventListener('click', () => deleteTask(task._id));
+
+          taskList.appendChild(item);
+        });
+
+      } catch (err) {
+        taskList.innerHTML = '<p class="status-msg">Failed to load tasks.</p>';
+      }
+    }
+
+    // ============================================
+    // STEP 3: Create a new task
+    // ============================================
+    taskForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formMsg.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            title: titleInput.value,
+            description: descriptionInput.value,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Something went wrong');
+        }
+
+        taskForm.reset();
+        loadTasks(); // refresh the list to show the new task
+
+      } catch (err) {
+        formMsg.textContent = err.message;
+        formMsg.className = 'form-msg error';
+        formMsg.classList.remove('hidden');
+      }
+    });
+
+    // ============================================
+    // STEP 4: Toggle a task between Pending and Completed
+    // ============================================
+    async function toggleStatus(task) {
+      const newStatus = task.status === 'Completed' ? 'Pending' : 'Completed';
+
+      await fetch(`/api/tasks/${task._id}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      loadTasks();
+    }
+
+    // ============================================
+    // STEP 5: Delete a task
+    // ============================================
+    async function deleteTask(id) {
+      await fetch(`/api/tasks/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+
+      loadTasks();
+    }
+
+    // ============================================
+    // STEP 6: Log out
+    // ============================================
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    });
+
+    // Kick things off — only runs if we didn't already redirect above
+    if (token) {
+      loadTasks();
+    }
+  </script>
+
+</body>
+</html>
